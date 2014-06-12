@@ -1,1 +1,7 @@
-0.1 - 12-06-2014 - Initial release.
+0.1 - 12-06-2014
+	- Initial release.
+
+0.2 - 12-06-2014
+	- Created class-hierarchy to allow different storage backends.
+	- Allow Redis to be used as a backing store.
+	- Updated POD.

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               WebService-Amazon-Route53-Caching
-version:            0.1
+version:            0.2
 abstract:           Caching layer on top of WebService::Amazon::Route53.
 author:
     - Steve Kemp <steve@steve.org.uk>

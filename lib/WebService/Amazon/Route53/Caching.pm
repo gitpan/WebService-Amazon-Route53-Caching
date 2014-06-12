@@ -20,7 +20,7 @@ object to provide two specific speedups:
 
 =item We force the use of HTTP Keep-Alive when accessing the remote Amazon API end-point.
 
-=item We cache the mapping between zones and Amazon IDs
+=item We cache the mapping between zone-names and Amazon IDs
 
 =back
 
@@ -44,22 +44,70 @@ significant speedups when dealing with a number of zones.
 
 =head1 CACHING
 
-Caching uses the L<DB_File> which provides a fast hash lookup,
-using the B<cache> argument passed to the constructor.
+This module supports two different types of caching:
 
-All other APIs remain the same.
+=over 8
+
+=item Caching via the fast in-memory datastore, Redis.
+
+=item Caching via the L<DB_File> module.
+
+=back
+
+To specify the method you need to pass the appropriate argument
+to the constructor of this class.
+
+The simplest approach involves passing a filename to use as the
+DB-store:
+
+=for example begin
+
+    my $c = WebService::Amazon::Route53::Caching->new( key => "xx",
+                                                       id  => "xx",
+                                                       path => "/tmp/x.db" );
+
+    $c->....
+
+=for example end
+
+The following example uses Redis :
+
+=for example begin
+
+    my $r = new Redis;
+
+    my $c = WebService::Amazon::Route53::Caching->new( key => "xx",
+                                                       id  => "xx",
+                                                       redis => $r );
+
+    $c->....
+
+=for example end
+
+
+All other class methods remain identical to those implemented in the
+parent.
 
 =cut
 
 
 package WebService::Amazon::Route53::Caching;
 
+use strict;
+use warnings;
+
+
 use base ("WebService::Amazon::Route53");
 use Carp;
 
+use WebService::Amazon::Route53::Caching::Store::DBM;
+use WebService::Amazon::Route53::Caching::Store::NOP;
+use WebService::Amazon::Route53::Caching::Store::Redis;
+
 use JSON;
-use DB_File;
-our $VERSION = "0.1";
+our $VERSION = "0.2";
+
+
 
 =begin doc
 
@@ -77,61 +125,37 @@ sub new
     # Invoke the superclass.
     my $self = $class->SUPER::new(%args);
 
-    # Store the cache-file if we've been given a name.
-    $self->{ '_cache' } = $args{ 'cache' };
 
-    # Update the User-Agent to use Keep-ALive.
+    #
+    #  This is messy only because the length of the classes.
+    #
+    #  We always create a caching mechanism, here we determine the correct
+    # one to load.
+    #
+    #  If none is explicitly specified then we use the NOP one.
+    #
+    if ( $args{ 'path' } )
+    {
+        $self->{ '_cache' } =
+          WebService::Amazon::Route53::Caching::Store::DBM->new(
+                                                      path => $args{ 'path' } );
+    }
+    elsif ( $args{ 'redis' } )
+    {
+        $self->{ '_cache' } =
+          WebService::Amazon::Route53::Caching::Store::Redis->new(
+                                                    redis => $args{ 'redis' } );
+    }
+    else
+    {
+        $self->{ '_cache' } =
+          WebService::Amazon::Route53::Caching::Store::NOP->new();
+    }
+
+    # Update the User-Agent to use Keep-Alive.
     $self->{ 'ua' } = LWP::UserAgent->new( keep_alive => 10 );
 
     return $self;
-}
-
-
-=begin doc
-
-Internal method to lookup the value of a key in our cache-file.
-
-=end doc
-
-=cut
-
-sub _cache_get
-{
-    my ( $self, $key ) = (@_);
-
-    return unless ( $self->{ '_cache' } );
-
-    my %h;
-    tie %h, "DB_File", $self->{ '_cache' }, O_RDWRD | O_CREAT, 0666, $DB_HASH or
-      return;
-
-    my $ret = $h{ $key };
-    untie(%h);
-
-    return ($ret);
-}
-
-
-=begin doc
-
-Internal method to store a value in our internal cache-file.
-
-=end doc
-
-=cut
-
-sub _cache_set
-{
-    my ( $self, $key, $val ) = (@_);
-
-    return unless ( $self->{ '_cache' } );
-
-    my %h;
-    tie %h, "DB_File", $self->{ '_cache' }, O_RDWRD | O_CREAT, 0666, $DB_HASH or
-      return;
-
-    $h{ $key } = $val;
-    untie(%h);
 }
 
 
@@ -156,7 +180,7 @@ sub find_hosted_zone
     #
     #  Lookup from the cache - deserializing after the fetch.
     #
-    my $data = $self->_cache_get( "zone_data_" . $args{ 'name' } );
+    my $data = $self->{ '_cache' }->get( "zone_data_" . $args{ 'name' } );
     if ( $data && length($data) )
     {
         my $obj = from_json($data);
@@ -171,7 +195,8 @@ sub find_hosted_zone
     #
     # Store the result in our cache so that the next time we'll get a hit.
     #
-    $self->_cache_set( "zone_data_" . $args{ 'name' }, to_json($result) );
+    $self->{ '_cache' }
+      ->set( "zone_data_" . $args{ 'name' }, to_json($result) );
 
     return ($result);
 }
@@ -192,9 +217,13 @@ sub create_hosted_zone
 
     my $result = $self->SUPER::create_hosted_zone(%args);
 
-    if ( result && $result->{ 'zone' } )
+    #
+    #  Update the cache.
+    #
+    if ( $result && $result->{ 'zone' } )
     {
-        $self->_cache_set( "zone_data_" . $args{ 'name' }, to_json($result) );
+        $self->{ '_cache' }
+          ->set( "zone_data_" . $args{ 'name' }, to_json($result) );
     }
 
     return ($result);
@@ -214,7 +243,10 @@ sub delete_hosted_zone
 {
     my ( $self, %args ) = (@_);
 
-    $self->_cache_set( "zone_data_" . $args{ 'name' }, undef );
+    #
+    #  Remove the cache-data associated with this key.
+    #
+    $self->{ '_cache' }->del( "zone_data_" . $args{ 'name' } );
 
     return ( $self->SUPER::delete_hosted_zone(%args) );
 }
