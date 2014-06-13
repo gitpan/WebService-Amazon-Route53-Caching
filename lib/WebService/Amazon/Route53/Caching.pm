@@ -105,7 +105,7 @@ use WebService::Amazon::Route53::Caching::Store::NOP;
 use WebService::Amazon::Route53::Caching::Store::Redis;
 
 use JSON;
-our $VERSION = "0.2";
+our $VERSION = "0.3";
 
 
 
@@ -195,11 +195,24 @@ sub find_hosted_zone
     #
     # Store the result in our cache so that the next time we'll get a hit.
     #
-    $self->{ '_cache' }
-      ->set( "zone_data_" . $args{ 'name' }, to_json($result) );
+    if ( $result )
+    {
+        # Store the values of the lookup.
+        $self->{ '_cache' }
+          ->set( "zone_data_" . $args{ 'name' }, to_json($result) );
+
+        # Store the mapping from the returned ID to the domain-data.
+        my $id = $result->{'id'};
+        if ( $id )
+        {
+            $self->{ '_cache' }
+              ->set( "zone_data_id_" . $id, $args{'name'} );
+        }
+    }
 
     return ($result);
 }
+
 
 
 =begin doc
@@ -224,10 +237,22 @@ sub create_hosted_zone
     {
         $self->{ '_cache' }
           ->set( "zone_data_" . $args{ 'name' }, to_json($result) );
+
+        #
+        # Store the mapping from the returned ID to the domain-data.
+        #
+        my $id = $result->{'id'};
+        if ( $id )
+        {
+            $self->{ '_cache' }
+              ->set( "zone_data_id_" . $id, $args{'name'} );
+        }
+
     }
 
     return ($result);
 }
+
 
 
 =begin doc
@@ -243,10 +268,21 @@ sub delete_hosted_zone
 {
     my ( $self, %args ) = (@_);
 
+    if ( !defined $args{ 'zone_id' } )
+    {
+        carp "Required parameter 'zone_id' is not defined";
+    }
+
     #
     #  Remove the cache-data associated with this key.
     #
-    $self->{ '_cache' }->del( "zone_data_" . $args{ 'name' } );
+    #  First lookup the name of the zone, so we can find the keyu
+    # which is based on the zone-name.
+    #
+    my $zone = $self->{ '_cache' }->get( "zone_data_id_" . $args{'zone_id'} );
+
+    $self->{ '_cache' }->del( "zone_data_"    . $zone ) if ( $zone );
+    $self->{ '_cache' }->del( "zone_data_id_" . $args{ 'zone_id' } );
 
     return ( $self->SUPER::delete_hosted_zone(%args) );
 }
