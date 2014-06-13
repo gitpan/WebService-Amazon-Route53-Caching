@@ -105,7 +105,7 @@ use WebService::Amazon::Route53::Caching::Store::NOP;
 use WebService::Amazon::Route53::Caching::Store::Redis;
 
 use JSON;
-our $VERSION = "0.3";
+our $VERSION = "0.4";
 
 
 
@@ -241,9 +241,10 @@ sub create_hosted_zone
         #
         # Store the mapping from the returned ID to the domain-data.
         #
-        my $id = $result->{'id'};
+        my $id = $result->{'zone'}->{'id'} || $result->{'id'};
         if ( $id )
         {
+            $id =~ s/\/hostedzone\///g;
             $self->{ '_cache' }
               ->set( "zone_data_id_" . $id, $args{'name'} );
         }
@@ -273,6 +274,7 @@ sub delete_hosted_zone
         carp "Required parameter 'zone_id' is not defined";
     }
 
+
     #
     #  Remove the cache-data associated with this key.
     #
@@ -287,4 +289,20 @@ sub delete_hosted_zone
     return ( $self->SUPER::delete_hosted_zone(%args) );
 }
 
+
+=begin doc
+
+Allow the caller to gain access to our caching object.
+
+=end doc
+
+=cut
+
+sub cache
+{
+    my( $self ) = ( @_ );
+    return( $self->{'_cache'} );
+}
+
 1;
+

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               WebService-Amazon-Route53-Caching
-version:            0.3
+version:            0.4
 abstract:           Caching layer on top of WebService::Amazon::Route53.
 author:
     - Steve Kemp <steve@steve.org.uk>
@@ -12,9 +12,13 @@ build_requires:
     ExtUtils::MakeMaker:  0
 requires:
     JSON:                 ~
+    Test::More:           ~
     WebService::Amazon::Route53:  ~
 resources:
-    license:  http://dev.perl.org/licenses/
+    bugtracker:  https://github.com/skx/WebService--Amazon--Route53--Caching/issues
+    homepage:    https://github.com/skx/WebService--Amazon--Route53--Caching/
+    license:     http://dev.perl.org/licenses/
+    repository:  https://github.com/skx/WebService--Amazon--Route53--Caching.git
 no_index:
     directory:
         - t
