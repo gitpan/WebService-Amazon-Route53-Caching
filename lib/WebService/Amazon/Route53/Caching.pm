@@ -90,6 +90,15 @@ parent.
 
 =cut
 
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2014 Steve Kemp <steve@steve.org.uk>.
+
+This library is free software. You can modify and or distribute it under
+the same terms as Perl itself.
+
+=cut
+
 
 package WebService::Amazon::Route53::Caching;
 
@@ -105,7 +114,7 @@ use WebService::Amazon::Route53::Caching::Store::NOP;
 use WebService::Amazon::Route53::Caching::Store::Redis;
 
 use JSON;
-our $VERSION = "0.4";
+our $VERSION = "0.4.1";
 
 
 
